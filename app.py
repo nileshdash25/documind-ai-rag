@@ -7,17 +7,21 @@ from dotenv import load_dotenv
 # 1. Page Configuration
 st.set_page_config(page_title="DocuMind AI", page_icon="🧠", layout="centered")
 
-# 2. API Setup (Hybrid Logic for Local & Cloud)
+# 2. API Setup (Crash-Proof Logic)
 load_dotenv()
 
-# Pehle Streamlit Cloud ke Secrets check karo, fir local .env
-if "GROQ_API_KEY" in st.secrets:
-    api_key = st.secrets["GROQ_API_KEY"]
-else:
+api_key = None
+
+# Defensive check for Streamlit Secrets to prevent "SecretNotFoundError"
+try:
+    if "GROQ_API_KEY" in st.secrets:
+        api_key = st.secrets["GROQ_API_KEY"]
+except Exception:
+    # If secrets are not found/initialized, fallback to environment variable (.env)
     api_key = os.getenv("GROQ_API_KEY")
 
 if not api_key:
-    st.error("❌ GROQ_API_KEY is missing! Please add it to Streamlit Secrets (Cloud) or .env file (Local).")
+    st.error("🚨 GROQ_API_KEY nahi mili! Streamlit Dashboard ke 'Secrets' mein add karo ya local .env file check karo.")
     st.stop()
 
 client = Groq(api_key=api_key)
@@ -56,7 +60,7 @@ with st.sidebar:
 
 # 5. Main Chat Logic
 if uploaded_file is not None:
-    # Read document text (cached to avoid re-reading on every message)
+    # Read document text (cached in session state)
     if "doc_context" not in st.session_state or st.session_state.get("last_uploaded") != uploaded_file.name:
         with st.spinner("Reading document..."):
             st.session_state.doc_context = extract_text(uploaded_file)
@@ -86,7 +90,6 @@ if uploaded_file is not None:
 
             # AI response generation
             with st.chat_message("assistant"):
-                # Build context-aware system prompt
                 system_prompt = f"""You are DocuMind, a helpful AI assistant. 
                 Answer the user's question STRICTLY based on the context provided below. 
                 If the answer is not in the context, say 'I cannot find this in the document.'
@@ -95,7 +98,6 @@ if uploaded_file is not None:
                 {context}
                 """
                 
-                # Full message history for the API
                 api_messages = [{"role": "system", "content": system_prompt}] + st.session_state.messages
                 
                 try:
